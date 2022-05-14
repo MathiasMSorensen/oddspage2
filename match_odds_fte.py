@@ -1,9 +1,8 @@
 
-from autokeras import StructuredDataClassifier
-from tensorflow.keras.models import load_model
+# from autokeras import StructuredDataClassifier
+# from tensorflow.keras.models import load_model
 from dicts import fte_odds_dict
 from getOdds import best_odds, best_oddsOU
-from tensorflow.python.keras.layers import LayerNormalization
 from missingpy import MissForest
 import pandas as pd
 import numpy as np
@@ -14,23 +13,23 @@ from utils import *
 from utils import kelly_and_provider, make_final_data, impute, Kelly_criteria, betting_function,  bookie_yield, odds_date, avg_points, stats_last_x_H2H, stats_last_x_matches, last_x_H2H, last_x_matches, betting_function_backtest
 from pathlib import Path
 import sys
-from tensorflow import keras
+# from tensorflow import keras
 import joblib
-from sklearn.ensemble import RandomForestClassifier
-import tensorflow
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.utils import to_categorical
-from tensorflow.keras import optimizers
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.layers import Dropout
-from tensorflow.keras import regularizers
-from keras.layers.advanced_activations import LeakyReLU
+import urllib.request
+import json
+import os
+import ssl
+# import tensorflow
+# from tensorflow.keras.models import Sequential
+# from tensorflow.keras.layers import Dense
+# from tensorflow.keras.utils import to_categorical
+# from tensorflow.keras import optimizers
+# from tensorflow.keras.callbacks import EarlyStopping
+# from tensorflow.keras.layers import Dropout
+# from tensorflow.keras import regularizers
+# from keras.layers.advanced_activations import LeakyReLU
 import joblib
 import os
-from sklearn.model_selection import train_test_split
-import sklearn.neighbors._base
-sys.modules['sklearn.neighbors.base'] = sklearn.neighbors._base
 # pd.set_option('display.max_rows', 1000)
 
 best_odds = pd.concat([best_odds, best_oddsOU], axis=0)
@@ -52,13 +51,17 @@ best_odds['fte_away'] = 0
 
 for i in range(len(best_odds)):
     if best_odds.league[i] != 'Mexican Primera Division Torneo Clausura':
-        best_odds.loc[i, 'fte_home'] = fte_odds_dict[best_odds.home_team[i]]
-        best_odds.loc[i, 'fte_away'] = fte_odds_dict[best_odds.away_team[i]]
-        print(i)
-
-odds_fte_df = pd.merge(best_odds, fte[((fte['date'] >= min(best_odds['time'])) & (fte['date'] < datetime.date(2022, 1, 1)))], left_on=['fte_home', 'fte_away'],
+        try:
+            best_odds.loc[i, 'fte_home'] = fte_odds_dict[best_odds.home_team[i]]
+            best_odds.loc[i, 'fte_away'] = fte_odds_dict[best_odds.away_team[i]]
+            print(i)
+        except: 
+            print("An exception occurred")
+            
+odds_fte_df = pd.merge(best_odds, fte[((fte['date'] >= min(best_odds['time'])) & (fte['date'] < datetime.date(2023, 1, 1)))], left_on=['fte_home', 'fte_away'],
                        right_on=['team1', 'team2'],
                        how='left')
+
 print(odds_fte_df.isna().sum())
 odds_fte_dfOU = odds_fte_df[odds_fte_df['2_provider'].isna()]
 odds_fte_df = odds_fte_df[odds_fte_df['O25_provider'].isna()]
@@ -117,7 +120,7 @@ Final_df = Final_df.dropna()
 
 # clean up
 del(DF)
-
+df_temp = pd.read_excel('1_Training-data.xlsx')
 # Merge OU table such that we can play on these odds as well.
 odds_fte_df[['home_team', 'away_team']
             ] = DF_temp[DF_temp['home_team'].isna() == False].reset_index(drop=True)
@@ -131,78 +134,68 @@ final_dfOU = pd.merge(best_oddsOU.reset_index(drop=True), final_df_temp_temp.res
 
 print(final_dfOU.isna().sum())
 
-final_dfOU = final_dfOU.dropna()
-# %% Let's play
-# First we play 1X2
-col_order = list(pd.read_csv('col-order')['0'])
-col_orderOU = list(pd.read_csv('col-orderOU')['0'])
 
-RF = RandomForestClassifier()
-RF = joblib.load("Random_forest.joblib")
-YprobRF = pd.DataFrame(RF.predict_proba(Final_df[col_order]))
+# df = Final_df
 
-# Neural Network
-# Number of epochs:
-epochs = 250
-# Number of neurons per layer:
-neurons = 10
-# Kernel initializer
-kernel_ini = 'glorot_normal'
-# Leaky_ReLU alpha
-lrelu_a = 0.4
+col_order = pd.read_csv('col_order')['0'].to_list()
 
-Xtrain = Final_df[col_order]
-NN = Sequential()
-# Adding layers:
-NN.add(
-    Dense(neurons, input_dim=Xtrain.shape[1], kernel_initializer=kernel_ini))
-NN.add(LeakyReLU(alpha=lrelu_a))
-# Add dropout:
-NN.add(Dropout(0.1, input_shape=(Xtrain.shape[1],)))
+for i in ['league', 'team1', 'team2']:
+    Final_df[i] = "example_value"
+    
+for i in ['season', 'date', 'score1', 'score2', 'xg1', 'xg2', 'nsxg1', 'nsxg2', 'adj_score1', 'adj_score2', 'Bookie_yield']:
+    Final_df[i] = 0
+    
 
-NN.add(Dense(neurons, kernel_initializer=kernel_ini))
-NN.add(LeakyReLU(alpha=lrelu_a))
+js_file = Final_df.iloc[:,:][col_order].to_dict()
+        
+js_file = json.loads(Final_df[col_order].to_json(orient='records'))
 
-NN.add(Dense(neurons, kernel_initializer=kernel_ini))
-NN.add(LeakyReLU(alpha=lrelu_a))
+def allowSelfSignedHttps(allowed):
+    # bypass the server certificate verification on client side
+    if allowed and not os.environ.get('PYTHONHTTPSVERIFY', '') and getattr(ssl, '_create_unverified_context', None):
+        ssl._create_default_https_context = ssl._create_unverified_context
 
-NN.add(Dense(neurons, kernel_initializer=kernel_ini))
-NN.add(LeakyReLU(alpha=lrelu_a))
+allowSelfSignedHttps(True) # this line is needed if you use self-signed certificate in your scoring service.
 
-NN.add(Dense(neurons, kernel_initializer=kernel_ini))
-NN.add(LeakyReLU(alpha=lrelu_a))
+res_list = []
+for i in range(len(js_file)):
+    # Request data goes here
+    data = {
+        "Inputs": {
+            "data":
+            [
+                js_file[i],
+            ]
+        },
+        "GlobalParameters": {
+            "method": "predict_proba"
+        }
+    }
 
-NN.add(Dense(neurons, kernel_initializer=kernel_ini))
-# Adding output layer:
-NN.add(Dense(3, kernel_initializer=kernel_ini, activation='softmax'))
+    body = str.encode(json.dumps(data))
 
-# Compiling model:
-NN.compile(loss='categorical_crossentropy',
-           optimizer=tensorflow.keras.optimizers.Adam(learning_rate=1e-3),
-           metrics=['categorical_crossentropy'])
+    url = 'http://4b417d5e-4f6b-460e-af46-016002eef6ff.northeurope.azurecontainer.io/score'
+    api_key = 'rjdSNWldony8yApNb0oc2LVK8scyicEj' # Replace this with the API key for the web service
+    headers = {'Content-Type':'application/json', 'Authorization':('Bearer '+ api_key)}
 
-# Load weights to the model
-NN.load_weights("DNN.h5")
+    req = urllib.request.Request(url, body, headers)
 
-# Predict it
-YprobNN = NN.predict(Final_df[col_order])
+    try:
+        response = urllib.request.urlopen(req)
 
-YprobNN = pd.DataFrame(YprobNN)
+        result = response.read()
+        res_list.append(json.loads(result)['Results'][0])
+    except urllib.error.HTTPError as error:
+        print("The request failed with status code: " + str(error.code))
 
-YprobNN = YprobNN[[2, 1, 0]]
+        # Print the headers - they include the requert ID and the timestamp, which are useful for debugging the failure
+        print(error.info())
+        print(error.read().decode("utf8", 'ignore'))
 
-YprobNN.columns = [0, 1, 2]
-
-w_RF = 1/4
-w_NN = 3/4
-weight = 11
-w_fte = 0
-spread_limit = 0.075
-# Make final prediction
-Yprob = YprobRF*w_RF+YprobNN*w_NN
 
 Probs = betting_function_backtest(Yprob, Final_df[col_order])
 
+weight = 0.05
 Probs = kelly_and_provider(best_odds, fte, Probs, weight)
 
 # pd.concat([YprobRF,YprobNN],axis=1)

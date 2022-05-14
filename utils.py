@@ -439,6 +439,7 @@ def make_final_data(odds_fte_df,Final_df):
 def bet(prob_data, margin):
     Bet = 'None'
     maxi = max(prob_data['Hp_diff'], prob_data['Dp_diff'], prob_data['Ap_diff'])
+    print(maxi)
     if(maxi>margin):
         y = prob_data[['Hp_diff','Dp_diff','Ap_diff']]==maxi
         col = pd.DataFrame(y.index[y==True])
@@ -540,8 +541,9 @@ def Kelly_criteria25(Probs, Ytest, weight):
 
 
 def betting_function_backtest(Yprob, Final_df):
+    print(Yprob)
 # Rename correspondingly:
-    Yprob.columns = ['A_p', 'D_p', 'H_p']
+    # Yprob.columns = ['A_p', 'D_p', 'H_p']
     # Set indices correctly:
     Yprob = Yprob.set_index(Final_df.index.values)
     # Generate Data Frame with implied probabilities:
@@ -560,7 +562,8 @@ def betting_function_backtest(Yprob, Final_df):
     Probs = Probs.merge(right=Final_df[['mH', 'mD', 'mA']], how='inner',
                         left_index=True, right_index=True)
     
-    Probs['Bet'] = Probs.apply(lambda y : bet(y, 0.075), axis=1)
+    print(Probs)
+    Probs['Bet'] = Probs.apply(lambda y : bet(y, 0.025), axis=1)
 
     return Probs
 
