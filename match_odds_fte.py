@@ -192,10 +192,13 @@ for i in range(len(js_file)):
         print(error.info())
         print(error.read().decode("utf8", 'ignore'))
 
+from utils import *
+Yprob = pd.DataFrame(res_list)
+Yprob.columns = ['A_p', 'D_p', 'H_p']
+handicap = 0.05
+Probs = betting_function_backtest(Yprob, Final_df[col_order], handicap)
 
-Probs = betting_function_backtest(Yprob, Final_df[col_order])
-
-weight = 0.05
+weight = 0.1
 Probs = kelly_and_provider(best_odds, fte, Probs, weight)
 
 # pd.concat([YprobRF,YprobNN],axis=1)
@@ -205,6 +208,37 @@ print(Probs[['time', 'league_x', 'fte_home', 'fte_away', 0, 'mH','mD','mA',
              'Hp_diff', 'Dp_diff', 'Ap_diff', 'Bet']][Probs['Bet'] != 'None'].sort_values(by='time'))
 
 # AboveBelow25
+
+
+print(Yprob)
+# Rename correspondingly:
+Yprob.columns = ['A_p', 'D_p', 'H_p']
+# Set indices correctly:
+Yprob = Yprob.set_index(Final_df.index.values)
+# Generate Data Frame with implied probabilities:
+odds_yield = 1/(1/Final_df[['mA','mD','mH']]).sum(axis=1)
+Probs = pd.DataFrame(pd.concat([odds_yield/Final_df['mA'],odds_yield/Final_df['mD'],odds_yield/Final_df['mH']], axis=1))
+
+Probs.columns = ['A_odds_p', 'D_odds_p', 'H_odds_p']
+# Merge with estimated probabilites:
+Probs = Probs.merge(right=Yprob, how='inner', left_index=True, right_index=True)
+
+# Calculate difference between estimated and implied probability:
+Probs['Hp_diff'] = Probs.H_p - Probs.H_odds_p
+Probs['Dp_diff'] = Probs.D_p - Probs.D_odds_p
+Probs['Ap_diff'] = Probs.A_p - Probs.A_odds_p
+# Merge to get odds:
+Probs = Probs.merge(right=Final_df[['mH', 'mD', 'mA']], how='inner',
+                    left_index=True, right_index=True)
+
+print(Probs)
+Probs['Bet'] = Probs.apply(lambda y : bet(y, 0.025), axis=1)
+
+
+
+
+
+max(Probs['Hp_diff'], Probs['Dp_diff'], Probs['Ap_diff'])   
 
 RF = RandomForestClassifier()
 RF = joblib.load("RF_OU.joblib")
