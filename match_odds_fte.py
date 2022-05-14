@@ -192,7 +192,7 @@ for i in range(len(js_file)):
         print(error.info())
         print(error.read().decode("utf8", 'ignore'))
 
-from utils import *
+from utils import betting_function_backtest
 Yprob = pd.DataFrame(res_list)
 Yprob.columns = ['A_p', 'D_p', 'H_p']
 handicap = 0.05
