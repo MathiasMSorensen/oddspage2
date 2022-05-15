@@ -7,6 +7,80 @@ import sklearn.neighbors._base
 from missingpy import MissForest
 import datetime
 
+
+def fte_data(best_odds):
+    url = "https://projects.fivethirtyeight.com/soccer-api/club/spi_matches.csv"
+    fte = pd.read_csv(url)
+
+    fte[fte.league.isin(best_odds.league.unique())]
+    fte.date = pd.to_datetime(fte.date).dt.date
+
+    best_odds.time = pd.to_datetime(best_odds.time).dt.date
+
+    best_odds = best_odds.reset_index(drop=True)
+
+    # Put fte names to odds names
+    best_odds['fte_home'] = 0
+    best_odds['fte_away'] = 0
+
+    for i in range(len(best_odds)):
+        if best_odds.league[i] != 'Mexican Primera Division Torneo Clausura':
+            try:
+                best_odds.loc[i, 'fte_home'] = fte_odds_dict[best_odds.home_team[i]]
+                best_odds.loc[i, 'fte_away'] = fte_odds_dict[best_odds.away_team[i]]
+                print(i)
+            except: 
+                print("An exception occurred")
+                
+    odds_fte_df = pd.merge(best_odds, fte[((fte['date'] >= min(best_odds['time'])) & (fte['date'] < datetime.date(2023, 1, 1)))], left_on=['fte_home', 'fte_away'],
+                        right_on=['team1', 'team2'],
+                        how='left')
+
+    print(odds_fte_df.isna().sum())
+    odds_fte_dfOU = odds_fte_df[odds_fte_df['2_provider'].isna()]
+    odds_fte_df = odds_fte_df[odds_fte_df['O25_provider'].isna()]
+
+    rel_columns = ['season', 'date', 'league_id', 'league_y', 'home_team', 'away_team', 'team1', 'team2', 'spi1',
+                'spi2', 'prob1', 'prob2', 'probtie', 'proj_score1', 'proj_score2',
+                'importance1', 'importance2', 'score1', 'score2', 'xg1', 'xg2',
+                'nsxg1', 'nsxg2', 'adj_score1', 'adj_score2', '1', 'X', '2']
+
+    odds_fte_df = odds_fte_df[rel_columns]
+    odds_fte_df = odds_fte_df.rename(
+        columns={'league_y': 'league', '1': 'mH', 'X': 'mD', '2': 'mA'})
+    odds_fte_df['Bookie_yield'] = 1 / \
+        (1/odds_fte_df['mH']+1/odds_fte_df['mD']+1/odds_fte_df['mA'])
+
+    # Merge with old data and make variables to use for backward stuff
+    rel_fte_col = ['season', 'date', 'league_id', 'league', 'team1', 'team2', 'spi1',
+                'spi2', 'prob1', 'prob2', 'probtie', 'proj_score1', 'proj_score2',
+                'importance1', 'importance2', 'score1', 'score2', 'xg1', 'xg2',
+                'nsxg1', 'nsxg2', 'adj_score1', 'adj_score2']
+
+    fte = fte[fte['date'] < min(best_odds['time'])]
+    fte = fte[(fte['date'] > datetime.date(2019, 1, 1))]
+    fte[['FTAG', 'FTHG', 'FTR', 'mH', 'mD', 'mA', 'Bookie_yield']] = 0
+    fte = fte[rel_fte_col]
+
+    FTR = np.zeros(len(fte), str)
+    FTR[fte['score1'] > fte['score2']] = 'H'
+    FTR[fte['score1'] == fte['score2']] = 'D'
+    FTR[fte['score1'] < fte['score2']] = 'A'
+    fte['FTR'] = FTR
+
+    Final_df = fte.reset_index(drop=True)
+
+    print(Final_df.isna().sum())
+
+    # Impute missing values using historical data
+
+    DF = pd.concat([Final_df.reset_index(drop=True),
+                odds_fte_df.reset_index(drop=True)]).reset_index(drop=True)
+
+    DF_temp = DF[['home_team', 'away_team']]
+    
+    return DF, Final_df
+
 def bookie_yield(H, D, A):
     try:
         x = (1/H + 1/D + 1/A - 1)
